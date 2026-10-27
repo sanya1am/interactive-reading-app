@@ -6,13 +6,23 @@ abstract class LibraryRepository {
 
   Future<Result<Book>> importBookFromDevice();
 
-  Future<Result<void>> deleteBook(String bookId);
+  Future<Result<void>> deleteBook(
+      String bookId,
+      );
 
   Future<Result<void>> updateReadingProgress({
     required String bookId,
     required double progress,
-    required int lastPageIndex,
+    String? lastCfi,
+    int? lastPageIndex,
   });
 
-  Future<Result<Book>> getBookById(String bookId);
+  Future<Result<void>> setFavorite({
+    required String bookId,
+    required bool isFavorite,
+  });
+
+  Future<Result<Book>> getBookById(
+      String bookId,
+      );
 }

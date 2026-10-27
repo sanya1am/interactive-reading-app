@@ -8,6 +8,8 @@ class Book {
     this.coverPath,
     this.readingProgress = 0,
     this.lastPageIndex = 0,
+    this.lastCfi,
+    this.isFavorite = false,
   });
 
   final String id;
@@ -16,8 +18,14 @@ class Book {
   final String filePath;
   final String? coverPath;
   final DateTime importedAt;
+
   final double readingProgress;
+
   final int lastPageIndex;
+
+  final String? lastCfi;
+
+  final bool isFavorite;
 
   Book copyWith({
     String? id,
@@ -28,6 +36,8 @@ class Book {
     DateTime? importedAt,
     double? readingProgress,
     int? lastPageIndex,
+    String? lastCfi,
+    bool? isFavorite,
   }) {
     return Book(
       id: id ?? this.id,
@@ -36,8 +46,13 @@ class Book {
       filePath: filePath ?? this.filePath,
       coverPath: coverPath ?? this.coverPath,
       importedAt: importedAt ?? this.importedAt,
-      readingProgress: readingProgress ?? this.readingProgress,
-      lastPageIndex: lastPageIndex ?? this.lastPageIndex,
+      readingProgress:
+      readingProgress ?? this.readingProgress,
+      lastPageIndex:
+      lastPageIndex ?? this.lastPageIndex,
+      lastCfi: lastCfi ?? this.lastCfi,
+      isFavorite:
+      isFavorite ?? this.isFavorite,
     );
   }
 }

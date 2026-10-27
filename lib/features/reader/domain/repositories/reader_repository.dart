@@ -1,5 +1,5 @@
 import '../../../../core/utils/result.dart';
-import '../entities/reader_page.dart';
+import '../entities/reader_document.dart';
 
 abstract class ReaderRepository {
   Future<Result<ReaderDocument>> openBook({
@@ -7,6 +7,7 @@ abstract class ReaderRepository {
     required String filePath,
     required String title,
     String? author,
-    int initialPageIndex = 0,
+    double initialProgress = 0,
+    String? initialCfi,
   });
 }

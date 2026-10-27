@@ -2,122 +2,264 @@ import 'package:flutter/foundation.dart';
 
 import '../../../library/domain/entities/book.dart';
 import '../../../library/domain/usecases/update_reading_progress.dart';
-import '../../domain/entities/reader_page.dart';
+import '../../domain/entities/reader_document.dart';
 import '../../domain/usecases/open_book.dart';
 
-enum ReaderStatus { initial, loading, ready, error }
+enum ReaderStatus {
+  initial,
+  loading,
+  ready,
+  error,
+}
 
-class ReaderViewModel extends ChangeNotifier {
+class ReaderViewModel
+    extends ChangeNotifier {
   ReaderViewModel({
     required OpenBook openBook,
-    required UpdateReadingProgress updateReadingProgress,
+    required UpdateReadingProgress
+    updateReadingProgress,
   })  : openBookUseCase = openBook,
-        updateReadingProgressUseCase = updateReadingProgress;
+        updateReadingProgressUseCase =
+            updateReadingProgress;
 
   final OpenBook openBookUseCase;
-  final UpdateReadingProgress updateReadingProgressUseCase;
 
-  ReaderStatus _status = ReaderStatus.initial;
+  final UpdateReadingProgress
+  updateReadingProgressUseCase;
+
+  ReaderStatus _status =
+      ReaderStatus.initial;
+
   ReaderDocument? _document;
-  int _currentPageIndex = 0;
   String? _errorMessage;
+
+  bool _viewerLoaded = false;
+
+  double _progress = 0;
+  String? _currentCfi;
+
+  String? _selectedText;
+  String? _selectedCfi;
+
   bool _savingProgress = false;
 
+  bool _saveRequestedWhileBusy =
+  false;
+
   ReaderStatus get status => _status;
-  ReaderDocument? get document => _document;
-  int get currentPageIndex => _currentPageIndex;
-  String? get errorMessage => _errorMessage;
-  bool get isLoading => _status == ReaderStatus.loading;
 
-  ReaderPage? get currentPage {
-    final doc = _document;
-    if (doc == null || doc.pages.isEmpty) return null;
-    return doc.pages[_currentPageIndex.clamp(0, doc.pages.length - 1)];
-  }
+  ReaderDocument? get document =>
+      _document;
 
-  double get progress {
-    final doc = _document;
-    if (doc == null || doc.totalPages == 0) return 0;
-    return (_currentPageIndex + 1) / doc.totalPages;
-  }
+  String? get errorMessage =>
+      _errorMessage;
 
-  String get pageLabel {
-    final doc = _document;
-    if (doc == null || doc.totalPages == 0) return '0 / 0';
-    return '${_currentPageIndex + 1} / ${doc.totalPages}';
-  }
+  bool get viewerLoaded =>
+      _viewerLoaded;
 
-  Future<void> open(Book book) async {
+  double get progress => _progress;
+
+  String? get currentCfi =>
+      _currentCfi;
+
+  String? get selectedText =>
+      _selectedText;
+
+  String? get selectedCfi =>
+      _selectedCfi;
+
+  int get progressPercent =>
+      (_progress * 100)
+          .round()
+          .clamp(0, 100)
+          .toInt();
+
+  Future<void> open(
+      Book book,
+      ) async {
     _status = ReaderStatus.loading;
+
     _errorMessage = null;
     _document = null;
+
+    _viewerLoaded = false;
+
+    _selectedText = null;
+    _selectedCfi = null;
+
+    _progress = book.readingProgress
+        .clamp(0.0, 1.0)
+        .toDouble();
+
+    _currentCfi = book.lastCfi;
+
     notifyListeners();
 
-    final result = await openBookUseCase(
+    final result =
+    await openBookUseCase(
       bookId: book.id,
       filePath: book.filePath,
       title: book.title,
       author: book.author,
-      initialPageIndex: book.lastPageIndex,
+      initialProgress:
+      book.readingProgress,
+      initialCfi: book.lastCfi,
     );
 
     if (result.isSuccess) {
-      final document = result.valueOrNull!;
+      final document =
+      result.valueOrNull!;
+
       _document = document;
-      _currentPageIndex = document.initialPageIndex;
+
+      _progress =
+          document.initialProgress;
+
+      _currentCfi =
+          document.initialCfi;
+
       _status = ReaderStatus.ready;
     } else {
-      _errorMessage = result.failureOrNull?.message ?? 'Не удалось открыть книгу';
+      _errorMessage =
+          result.failureOrNull?.message ??
+              'Не удалось открыть книгу';
+
       _status = ReaderStatus.error;
     }
+
     notifyListeners();
   }
 
-  Future<void> goToPage(int index) async {
-    final doc = _document;
-    if (doc == null || doc.pages.isEmpty) return;
+  void onViewerLoaded() {
+    if (_viewerLoaded) {
+      return;
+    }
 
-    final next = index.clamp(0, doc.pages.length - 1);
-    if (next == _currentPageIndex) return;
+    _viewerLoaded = true;
 
-    _currentPageIndex = next;
     notifyListeners();
-    await _persistProgress();
   }
 
-  Future<void> nextPage() => goToPage(_currentPageIndex + 1);
+  void onViewerError(
+      String message,
+      ) {
+    _errorMessage =
+    message.trim().isEmpty
+        ? 'EPUB-рендерер не смог открыть книгу'
+        : 'Не удалось отобразить EPUB: $message';
 
-  Future<void> previousPage() => goToPage(_currentPageIndex - 1);
+    _status = ReaderStatus.error;
 
-  /// Resolves an internal EPUB href (TOC / cross-reference) to a page index.
-  int? resolveInternalLink(String href) {
-    final doc = _document;
-    if (doc == null) return null;
-    return doc.resolveHref(
-      href,
-      fromFile: currentPage?.contentFileName,
-    );
+    _viewerLoaded = false;
+
+    notifyListeners();
   }
 
-  Future<bool> openInternalLink(String href) async {
-    final pageIndex = resolveInternalLink(href);
-    if (pageIndex == null) return false;
-    await goToPage(pageIndex);
-    return true;
+  Future<void> onRelocated({
+    required double progress,
+    required String startCfi,
+  }) async {
+    final safeProgress =
+    progress.isFinite
+        ? progress
+        .clamp(0.0, 1.0)
+        .toDouble()
+        : _progress;
+
+    final safeCfi =
+    startCfi.trim();
+
+    final progressChanged =
+        (safeProgress - _progress)
+            .abs() >
+            0.0001;
+
+    final cfiChanged =
+        safeCfi.isNotEmpty &&
+            safeCfi != _currentCfi;
+
+    _progress = safeProgress;
+
+    if (safeCfi.isNotEmpty) {
+      _currentCfi = safeCfi;
+    }
+
+    if (progressChanged ||
+        cfiChanged) {
+      notifyListeners();
+
+      await _persistProgress();
+    }
   }
 
-  Future<void> _persistProgress() async {
-    final doc = _document;
-    if (doc == null || _savingProgress) return;
+  void onTextSelected({
+    required String text,
+    required String cfi,
+  }) {
+    final normalizedText =
+    text.trim();
 
-    _savingProgress = true;
-    await updateReadingProgressUseCase(
-      bookId: doc.bookId,
-      progress: progress,
-      lastPageIndex: _currentPageIndex,
-    );
-    _savingProgress = false;
+    final normalizedCfi =
+    cfi.trim();
+
+    _selectedText =
+    normalizedText.isEmpty
+        ? null
+        : normalizedText;
+
+    _selectedCfi =
+    normalizedCfi.isEmpty
+        ? null
+        : normalizedCfi;
+
+    notifyListeners();
   }
 
-  Future<void> saveProgressOnExit() => _persistProgress();
+  void clearSelection() {
+    if (_selectedText == null &&
+        _selectedCfi == null) {
+      return;
+    }
+
+    _selectedText = null;
+    _selectedCfi = null;
+
+    notifyListeners();
+  }
+
+  Future<void>
+  _persistProgress() async {
+    final document = _document;
+
+    if (document == null) {
+      return;
+    }
+
+    if (_savingProgress) {
+      _saveRequestedWhileBusy =
+      true;
+
+      return;
+    }
+
+    do {
+      _saveRequestedWhileBusy =
+      false;
+
+      _savingProgress = true;
+
+      await updateReadingProgressUseCase(
+        bookId: document.bookId,
+        progress: _progress,
+        lastCfi: _currentCfi,
+      );
+
+      _savingProgress = false;
+    } while (
+    _saveRequestedWhileBusy);
+  }
+
+  Future<void>
+  saveProgressOnExit() =>
+      _persistProgress();
 }

@@ -4,79 +4,223 @@ import 'package:flutter/material.dart';
 
 import '../../domain/entities/book.dart';
 
-class BookListItem extends StatelessWidget {
+class BookListItem
+    extends StatelessWidget {
   const BookListItem({
     super.key,
     required this.book,
     required this.onTap,
+    required this.onFavorite,
     required this.onDelete,
   });
 
   final Book book;
+
   final VoidCallback onTap;
+
+  final VoidCallback onFavorite;
+
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final progressPercent = (book.readingProgress * 100).clamp(0, 100).round();
+    final theme =
+    Theme.of(context);
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    final progress =
+    book.readingProgress
+        .clamp(0.0, 1.0)
+        .toDouble();
+
+    final progressPercent =
+    (progress * 100).round();
+
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
+        borderRadius:
+        BorderRadius.circular(18),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding:
+          const EdgeInsets.symmetric(
+            vertical: 9,
+          ),
           child: Row(
+            crossAxisAlignment:
+            CrossAxisAlignment.start,
             children: [
-              _CoverThumb(coverPath: book.coverPath),
-              const SizedBox(width: 12),
+              _CoverThumb(
+                coverPath:
+                book.coverPath,
+              ),
+              const SizedBox(width: 14),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      book.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (book.author != null) ...[
-                      const SizedBox(height: 4),
+                child: Padding(
+                  padding:
+                  const EdgeInsets.only(
+                    top: 3,
+                  ),
+                  child: Column(
+                    crossAxisAlignment:
+                    CrossAxisAlignment
+                        .start,
+                    children: [
                       Text(
-                        book.author!,
+                        book.title,
+                        maxLines: 2,
+                        overflow:
+                        TextOverflow
+                            .ellipsis,
+                        style: theme
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(
+                          fontFamily:
+                          'serif',
+                          fontWeight:
+                          FontWeight
+                              .w700,
+                        ),
+                      ),
+                      const SizedBox(
+                        height: 3,
+                      ),
+                      Text(
+                        book.author
+                            ?.trim()
+                            .isNotEmpty ==
+                            true
+                            ? book.author!
+                            : 'Автор не указан',
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                        overflow:
+                        TextOverflow
+                            .ellipsis,
+                        style: theme
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(
+                          color: theme
+                              .colorScheme
+                              .onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(
+                        height: 10,
+                      ),
+                      Row(
+                        children: [
+                          Text(
+                            progressPercent ==
+                                0
+                                ? 'Не начато'
+                                : '$progressPercent%',
+                            style: theme
+                                .textTheme
+                                .labelMedium
+                                ?.copyWith(
+                              color: theme
+                                  .colorScheme
+                                  .primary,
+                              fontWeight:
+                              FontWeight
+                                  .w700,
+                            ),
+                          ),
+                          if (progressPercent >
+                              0) ...[
+                            const SizedBox(
+                              width: 10,
+                            ),
+                            Expanded(
+                              child:
+                              ClipRRect(
+                                borderRadius:
+                                BorderRadius
+                                    .circular(
+                                  999,
+                                ),
+                                child:
+                                LinearProgressIndicator(
+                                  value:
+                                  progress,
+                                  minHeight: 4,
+                                  backgroundColor:
+                                  theme
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Column(
+                children: [
+                  IconButton(
+                    tooltip:
+                    book.isFavorite
+                        ? 'Убрать из избранного'
+                        : 'В избранное',
+                    onPressed:
+                    onFavorite,
+                    icon: Icon(
+                      book.isFavorite
+                          ? Icons
+                          .favorite_rounded
+                          : Icons
+                          .favorite_border_rounded,
+                      color:
+                      book.isFavorite
+                          ? const Color(
+                        0xFFB15C57,
+                      )
+                          : theme
+                          .colorScheme
+                          .onSurfaceVariant,
+                    ),
+                  ),
+                  PopupMenuButton<
+                      String>(
+                    tooltip: 'Ещё',
+                    onSelected: (
+                        value,
+                        ) {
+                      if (value ==
+                          'delete') {
+                        onDelete();
+                      }
+                    },
+                    itemBuilder:
+                        (context) =>
+                    const [
+                      PopupMenuItem(
+                        value:
+                        'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons
+                                  .delete_outline_rounded,
+                            ),
+                            SizedBox(
+                              width: 10,
+                            ),
+                            Text(
+                              'Удалить',
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                    const SizedBox(height: 8),
-                    Text(
-                      progressPercent == 0
-                          ? 'Не начато'
-                          : 'Прогресс: $progressPercent%',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                    if (book.readingProgress > 0) ...[
-                      const SizedBox(height: 6),
-                      LinearProgressIndicator(
-                        value: book.readingProgress.clamp(0, 1),
-                        minHeight: 4,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: 'Удалить',
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
               ),
             ],
           ),
@@ -86,33 +230,47 @@ class BookListItem extends StatelessWidget {
   }
 }
 
-class _CoverThumb extends StatelessWidget {
-  const _CoverThumb({required this.coverPath});
+class _CoverThumb
+    extends StatelessWidget {
+  const _CoverThumb({
+    required this.coverPath,
+  });
 
   final String? coverPath;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final hasCover = coverPath != null && File(coverPath!).existsSync();
+    final theme =
+    Theme.of(context);
+
+    final hasCover =
+        coverPath != null &&
+            File(coverPath!).existsSync();
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius:
+      BorderRadius.circular(12),
       child: SizedBox(
-        width: 56,
-        height: 80,
+        width: 70,
+        height: 100,
         child: hasCover
             ? Image.file(
-                File(coverPath!),
-                fit: BoxFit.cover,
-              )
+          File(coverPath!),
+          fit: BoxFit.cover,
+        )
             : ColoredBox(
-                color: theme.colorScheme.surfaceContainerHighest,
-                child: Icon(
-                  Icons.menu_book_rounded,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
+          color: theme
+              .colorScheme
+              .surfaceContainerHighest,
+          child: Icon(
+            Icons
+                .auto_stories_rounded,
+            color: theme
+                .colorScheme
+                .primary,
+            size: 30,
+          ),
+        ),
       ),
     );
   }
