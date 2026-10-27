@@ -1,217 +1,803 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_epub_viewer/flutter_epub_viewer.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/di/injection.dart';
+import '../../../../app/theme/app_theme.dart';
 import '../../../library/domain/entities/book.dart';
+import '../../domain/entities/reader_document.dart';
 import '../viewmodels/reader_view_model.dart';
-import '../widgets/reader_page_content.dart';
 
-class ReaderPage extends StatelessWidget {
-  const ReaderPage({super.key, required this.book});
+class ReaderPage
+    extends StatelessWidget {
+  const ReaderPage({
+    super.key,
+    required this.book,
+  });
 
   final Book book;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => sl.createReaderViewModel()..open(book),
+      create: (_) =>
+      sl.createReaderViewModel()
+        ..open(book),
       child: const _ReaderView(),
     );
   }
 }
 
-class _ReaderView extends StatefulWidget {
+class _ReaderView
+    extends StatefulWidget {
   const _ReaderView();
 
   @override
-  State<_ReaderView> createState() => _ReaderViewState();
+  State<_ReaderView> createState() =>
+      _ReaderViewState();
 }
 
-class _ReaderViewState extends State<_ReaderView> {
-  PageController? _pageController;
+class _ReaderViewState
+    extends State<_ReaderView> {
+  final EpubController
+  _epubController =
+  EpubController();
 
-  @override
-  void dispose() {
-    _pageController?.dispose();
-    super.dispose();
+  EpubSource? _epubSource;
+
+  String? _epubSourcePath;
+
+  bool _restoredByProgress =
+  false;
+
+  double _fontSize = 16;
+
+  EpubSource _sourceFor(
+      String filePath,
+      ) {
+    if (_epubSource == null ||
+        _epubSourcePath !=
+            filePath) {
+      _epubSourcePath =
+          filePath;
+
+      _epubSource =
+          EpubSource.fromFile(
+            File(filePath),
+          );
+
+      _restoredByProgress =
+      false;
+    }
+
+    return _epubSource!;
   }
 
-  void _ensureController(int initialPage) {
-    if (_pageController != null) return;
-    _pageController = PageController(initialPage: initialPage);
+  Future<void>
+  _showReadingSettings() async {
+    var temporaryFontSize =
+        _fontSize;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor:
+      AppTheme.surface,
+      showDragHandle: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (
+              context,
+              setSheetState,
+              ) {
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding:
+                const EdgeInsets
+                    .fromLTRB(
+                  24,
+                  6,
+                  24,
+                  28,
+                ),
+                child: Column(
+                  mainAxisSize:
+                  MainAxisSize.min,
+                  crossAxisAlignment:
+                  CrossAxisAlignment
+                      .start,
+                  children: [
+                    Text(
+                      'Настройки чтения',
+                      style:
+                      Theme.of(
+                        context,
+                      ).textTheme
+                          .titleLarge,
+                    ),
+                    const SizedBox(
+                      height: 24,
+                    ),
+                    Row(
+                      children: [
+                        const Text(
+                          'Aa',
+                          style:
+                          TextStyle(
+                            fontSize:
+                            14,
+                          ),
+                        ),
+                        Expanded(
+                          child:
+                          Slider(
+                            min: 13,
+                            max: 26,
+                            divisions:
+                            13,
+                            value:
+                            temporaryFontSize,
+                            onChanged:
+                                (
+                                value,
+                                ) {
+                              setSheetState(
+                                    () {
+                                  temporaryFontSize =
+                                      value;
+                                },
+                              );
+
+                              _epubController
+                                  .setFontSize(
+                                fontSize:
+                                value,
+                              );
+                            },
+                          ),
+                        ),
+                        const Text(
+                          'Aa',
+                          style:
+                          TextStyle(
+                            fontSize:
+                            24,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(
+                      height: 4,
+                    ),
+                    Text(
+                      'Размер текста: ${temporaryFontSize.round()}',
+                      style:
+                      Theme.of(
+                        context,
+                      ).textTheme
+                          .bodySmall
+                          ?.copyWith(
+                        color:
+                        Theme.of(
+                          context,
+                        ).colorScheme
+                            .onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (mounted) {
+      setState(
+            () {
+          _fontSize =
+              temporaryFontSize;
+        },
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ReaderViewModel>(
-      builder: (context, viewModel, _) {
-        final document = viewModel.document;
-
-        if (viewModel.status == ReaderStatus.ready && document != null) {
-          _ensureController(document.initialPageIndex);
-        }
+    return Consumer<
+        ReaderViewModel>(
+      builder: (
+          context,
+          viewModel,
+          _,
+          ) {
+        final document =
+            viewModel.document;
 
         return PopScope(
           canPop: true,
-          onPopInvokedWithResult: (didPop, _) async {
+          onPopInvokedWithResult:
+              (
+              didPop,
+              _,
+              ) async {
             if (didPop) {
-              await viewModel.saveProgressOnExit();
+              await viewModel
+                  .saveProgressOnExit();
             }
           },
           child: Scaffold(
+            backgroundColor:
+            AppTheme.background,
+
             appBar: AppBar(
-              title: Text(
-                document?.title ?? 'Чтение',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              toolbarHeight: 72,
+              centerTitle: true,
+
+              leading: IconButton(
+                tooltip: 'Назад',
+                onPressed: () =>
+                    Navigator.of(
+                      context,
+                    ).maybePop(),
+                icon:
+                const Icon(
+                  Icons
+                      .arrow_back_ios_new_rounded,
+                  size: 20,
+                ),
               ),
-              actions: [
-                if (document != null)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 16),
-                      child: Text(
-                        viewModel.pageLabel,
-                        style: Theme.of(context).textTheme.labelLarge,
+
+              title:
+              document == null
+                  ? const Text(
+                'Чтение',
+              )
+                  : Column(
+                mainAxisSize:
+                MainAxisSize
+                    .min,
+                children: [
+                  Text(
+                    document
+                        .title,
+                    maxLines:
+                    1,
+                    overflow:
+                    TextOverflow
+                        .ellipsis,
+                    style:
+                    Theme.of(
+                      context,
+                    ).textTheme
+                        .titleMedium
+                        ?.copyWith(
+                      fontFamily:
+                      'serif',
+                      fontWeight:
+                      FontWeight
+                          .w700,
+                    ),
+                  ),
+                  if (document
+                      .author
+                      ?.trim()
+                      .isNotEmpty ==
+                      true) ...[
+                    const SizedBox(
+                      height:
+                      2,
+                    ),
+                    Text(
+                      document
+                          .author!,
+                      maxLines:
+                      1,
+                      overflow:
+                      TextOverflow
+                          .ellipsis,
+                      style:
+                      Theme.of(
+                        context,
+                      ).textTheme
+                          .labelSmall
+                          ?.copyWith(
+                        color:
+                        Theme.of(
+                          context,
+                        ).colorScheme
+                            .onSurfaceVariant,
                       ),
                     ),
-                  ),
-              ],
-            ),
-            body: switch (viewModel.status) {
-              ReaderStatus.initial || ReaderStatus.loading => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-              ReaderStatus.error => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          viewModel.errorMessage ?? 'Ошибка открытия книги',
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: () => Navigator.of(context).maybePop(),
-                          child: const Text('Назад'),
-                        ),
-                      ],
+                  ],
+                ],
+              ),
+
+              actions: [
+                IconButton(
+                  tooltip:
+                  'Настройки чтения',
+                  onPressed:
+                  document == null
+                      ? null
+                      : _showReadingSettings,
+                  icon:
+                  const Text(
+                    'Aa',
+                    style:
+                    TextStyle(
+                      fontFamily:
+                      'serif',
+                      fontSize:
+                      18,
+                      fontWeight:
+                      FontWeight
+                          .w700,
                     ),
                   ),
                 ),
-              ReaderStatus.ready => _ReadyBody(
-                  pageController: _pageController!,
+                const SizedBox(
+                  width: 6,
                 ),
+              ],
+            ),
+
+            body:
+            switch (
+            viewModel.status) {
+              ReaderStatus.initial ||
+              ReaderStatus.loading =>
+              const Center(
+                child:
+                CircularProgressIndicator(),
+              ),
+
+              ReaderStatus.error =>
+                  _ErrorBody(
+                    message:
+                    viewModel
+                        .errorMessage ??
+                        'Ошибка открытия книги',
+                  ),
+
+              ReaderStatus.ready =>
+                  _buildReader(
+                    context,
+                    viewModel,
+                    document!,
+                  ),
             },
           ),
         );
       },
     );
   }
-}
 
-class _ReadyBody extends StatelessWidget {
-  const _ReadyBody({
-    required this.pageController,
-  });
-
-  final PageController pageController;
-
-  @override
-  Widget build(BuildContext context) {
-    final viewModel = context.watch<ReaderViewModel>();
-    final document = viewModel.document!;
-    final theme = Theme.of(context);
+  Widget _buildReader(
+      BuildContext context,
+      ReaderViewModel viewModel,
+      ReaderDocument document,
+      ) {
+    final source =
+    _sourceFor(
+      document.filePath,
+    );
 
     return Column(
       children: [
-        LinearProgressIndicator(
-          value: viewModel.progress,
-          minHeight: 3,
-        ),
-        if (viewModel.currentPage != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                viewModel.currentPage!.chapterTitle,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ),
-          ),
         Expanded(
-          child: PageView.builder(
-            controller: pageController,
-            itemCount: document.totalPages,
-            onPageChanged: viewModel.goToPage,
-            itemBuilder: (context, index) {
-              final page = document.pages[index];
-              return ReaderPageContent(
-                blocks: page.blocks,
-                onLinkTap: (href) async {
-                  final target = viewModel.resolveInternalLink(href);
-                  if (target == null) {
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Не удалось открыть ссылку оглавления'),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: EpubViewer(
+                  epubController:
+                  _epubController,
+
+                  epubSource:
+                  source,
+
+                  initialCfi:
+                  document
+                      .initialCfi,
+
+                  displaySettings:
+                  EpubDisplaySettings(
+                    flow:
+                    EpubFlow
+                        .paginated,
+
+                    spread:
+                    EpubSpread
+                        .none,
+
+                    snap: false,
+
+                    useSnapAnimationAndroid:
+                    false,
+
+                    allowScriptedContent:
+                    false,
+                  ),
+
+                  selectionContextMenu:
+                  EpubContextMenu(
+                    hideDefaultSystemItems:
+                    true,
+                    items: [
+                      EpubContextMenuItem(
+                        id: 1,
+                        title:
+                        'Копировать',
+                        action:
+                            () {
+                          final text =
+                          viewModel
+                              .selectedText
+                              ?.trim();
+
+                          if (text ==
+                              null ||
+                              text
+                                  .isEmpty) {
+                            return;
+                          }
+
+                          Clipboard
+                              .setData(
+                            ClipboardData(
+                              text:
+                              text,
+                            ),
+                          );
+
+                          _epubController
+                              .clearSelection();
+                        },
+                      ),
+                      EpubContextMenuItem(
+                        id: 2,
+                        title:
+                        'Перевести',
+                        action:
+                            () {
+                          final text =
+                          viewModel
+                              .selectedText
+                              ?.trim();
+
+                          if (text ==
+                              null ||
+                              text
+                                  .isEmpty) {
+                            return;
+                          }
+
+                          ScaffoldMessenger
+                              .of(
+                            context,
+                          ).showSnackBar(
+                            const SnackBar(
+                              content:
+                              Text(
+                                'Перевод подключим к backend следующим этапом',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+
+                  onEpubLoaded:
+                      () {
+                    viewModel
+                        .onViewerLoaded();
+
+                    _epubController
+                        .updateTheme(
+                      theme:
+                      EpubTheme
+                          .custom(
+                        customCss:
+                        {
+                          '::selection':
+                          {
+                            'background':
+                            'rgba(69, 107, 87, 0.28)',
+                          },
+                        },
                       ),
                     );
-                    return;
-                  }
-                  pageController.jumpToPage(target);
-                  await viewModel.goToPage(target);
-                },
-              );
-            },
-          ),
-        ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Row(
-              children: [
-                IconButton.filledTonal(
-                  onPressed: viewModel.currentPageIndex > 0
-                      ? () {
-                          pageController.previousPage(
-                            duration: const Duration(milliseconds: 250),
-                            curve: Curves.easeOut,
-                          );
-                        }
-                      : null,
-                  icon: const Icon(Icons.chevron_left),
+                  },
+
+                  onLocationLoaded:
+                      () {
+                    if (_restoredByProgress) {
+                      return;
+                    }
+
+                    if (document
+                        .initialCfi !=
+                        null) {
+                      return;
+                    }
+
+                    if (document
+                        .initialProgress <=
+                        0) {
+                      return;
+                    }
+
+                    _restoredByProgress =
+                    true;
+
+                    _epubController
+                        .toProgressPercentage(
+                      document
+                          .initialProgress,
+                    );
+                  },
+
+                  onRelocated:
+                      (
+                      location,
+                      ) {
+                    viewModel
+                        .onRelocated(
+                      progress:
+                      location
+                          .progress,
+                      startCfi:
+                      location
+                          .startCfi,
+                    );
+                  },
+
+                  onTextSelected:
+                      (
+                      selection,
+                      ) {
+                    viewModel
+                        .onTextSelected(
+                      text:
+                      selection
+                          .selectedText,
+                      cfi:
+                      selection
+                          .selectionCfi,
+                    );
+                  },
+
+                  onDeselection:
+                  viewModel
+                      .clearSelection,
+
+                  onLoadError:
+                      (
+                      error,
+                      ) {
+                    viewModel
+                        .onViewerError(
+                      error
+                          .toString(),
+                    );
+                  },
+
+                  clearSelectionOnPageChange:
+                  false,
                 ),
-                Expanded(
-                  child: Text(
-                    viewModel.pageLabel,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleSmall,
+              ),
+
+              if (!viewModel
+                  .viewerLoaded)
+                const Positioned.fill(
+                  child:
+                  ColoredBox(
+                    color:
+                    AppTheme
+                        .background,
+                    child:
+                    Center(
+                      child:
+                      CircularProgressIndicator(),
+                    ),
                   ),
                 ),
-                IconButton.filledTonal(
-                  onPressed:
-                      viewModel.currentPageIndex < document.totalPages - 1
-                          ? () {
-                              pageController.nextPage(
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeOut,
-                              );
-                            }
-                          : null,
-                  icon: const Icon(Icons.chevron_right),
-                ),
-              ],
+            ],
+          ),
+        ),
+
+        _ReaderBottomBar(
+          progress:
+          viewModel.progress,
+          progressPercent:
+          viewModel
+              .progressPercent,
+          onPrevious: () =>
+              _epubController
+                  .prev(),
+          onNext: () =>
+              _epubController
+                  .next(),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReaderBottomBar
+    extends StatelessWidget {
+  const _ReaderBottomBar({
+    required this.progress,
+    required this.progressPercent,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final double progress;
+
+  final int progressPercent;
+
+  final VoidCallback onPrevious;
+
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme =
+    Theme.of(context);
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding:
+        const EdgeInsets.fromLTRB(
+          18,
+          10,
+          18,
+          12,
+        ),
+        decoration:
+        const BoxDecoration(
+          color:
+          AppTheme.background,
+          border: Border(
+            top: BorderSide(
+              color:
+              AppTheme.outline,
             ),
           ),
         ),
-      ],
+        child: Row(
+          children: [
+            IconButton.filledTonal(
+              tooltip: 'Назад',
+              onPressed: onPrevious,
+              icon:
+              const Icon(
+                Icons
+                    .chevron_left_rounded,
+              ),
+            ),
+
+            const SizedBox(
+              width: 14,
+            ),
+
+            Expanded(
+              child: Column(
+                children: [
+                  ClipRRect(
+                    borderRadius:
+                    BorderRadius
+                        .circular(
+                      999,
+                    ),
+                    child:
+                    LinearProgressIndicator(
+                      value: progress
+                          .clamp(
+                        0.0,
+                        1.0,
+                      ),
+                      minHeight: 5,
+                      backgroundColor:
+                      theme
+                          .colorScheme
+                          .surfaceContainerHighest,
+                      color:
+                      AppTheme
+                          .primary,
+                    ),
+                  ),
+
+                  const SizedBox(
+                    height: 7,
+                  ),
+
+                  Text(
+                    '$progressPercent%',
+                    style: theme
+                        .textTheme
+                        .labelMedium
+                        ?.copyWith(
+                      color: theme
+                          .colorScheme
+                          .onSurfaceVariant,
+                      fontWeight:
+                      FontWeight
+                          .w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(
+              width: 14,
+            ),
+
+            IconButton.filledTonal(
+              tooltip: 'Далее',
+              onPressed: onNext,
+              icon:
+              const Icon(
+                Icons
+                    .chevron_right_rounded,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorBody
+    extends StatelessWidget {
+  const _ErrorBody({
+    required this.message,
+  });
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding:
+        const EdgeInsets.all(
+          24,
+        ),
+        child: Column(
+          mainAxisSize:
+          MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              textAlign:
+              TextAlign.center,
+            ),
+            const SizedBox(
+              height: 12,
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(
+                    context,
+                  ).maybePop(),
+              child:
+              const Text(
+                'Назад',
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

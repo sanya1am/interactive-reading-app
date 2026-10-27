@@ -10,6 +10,8 @@ class BookModel extends Book {
     super.coverPath,
     super.readingProgress,
     super.lastPageIndex,
+    super.lastCfi,
+    super.isFavorite,
   });
 
   factory BookModel.fromEntity(Book book) {
@@ -22,19 +24,32 @@ class BookModel extends Book {
       importedAt: book.importedAt,
       readingProgress: book.readingProgress,
       lastPageIndex: book.lastPageIndex,
+      lastCfi: book.lastCfi,
+      isFavorite: book.isFavorite,
     );
   }
 
-  factory BookModel.fromJson(Map<String, dynamic> json) {
+  factory BookModel.fromJson(
+      Map<String, dynamic> json,
+      ) {
     return BookModel(
       id: json['id'] as String,
       title: json['title'] as String,
       author: json['author'] as String?,
       filePath: json['filePath'] as String,
       coverPath: json['coverPath'] as String?,
-      importedAt: DateTime.parse(json['importedAt'] as String),
-      readingProgress: (json['readingProgress'] as num?)?.toDouble() ?? 0,
-      lastPageIndex: json['lastPageIndex'] as int? ?? 0,
+      importedAt: DateTime.parse(
+        json['importedAt'] as String,
+      ),
+      readingProgress:
+      (json['readingProgress'] as num?)
+          ?.toDouble() ??
+          0,
+      lastPageIndex:
+      json['lastPageIndex'] as int? ?? 0,
+      lastCfi: json['lastCfi'] as String?,
+      isFavorite:
+      json['isFavorite'] as bool? ?? false,
     );
   }
 
@@ -45,9 +60,12 @@ class BookModel extends Book {
       'author': author,
       'filePath': filePath,
       'coverPath': coverPath,
-      'importedAt': importedAt.toIso8601String(),
+      'importedAt':
+      importedAt.toIso8601String(),
       'readingProgress': readingProgress,
       'lastPageIndex': lastPageIndex,
+      'lastCfi': lastCfi,
+      'isFavorite': isFavorite,
     };
   }
 }

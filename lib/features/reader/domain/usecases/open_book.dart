@@ -1,5 +1,5 @@
 import '../../../../core/utils/result.dart';
-import '../entities/reader_page.dart';
+import '../entities/reader_document.dart';
 import '../repositories/reader_repository.dart';
 
 class OpenBook {
@@ -12,14 +12,16 @@ class OpenBook {
     required String filePath,
     required String title,
     String? author,
-    int initialPageIndex = 0,
+    double initialProgress = 0,
+    String? initialCfi,
   }) {
     return _repository.openBook(
       bookId: bookId,
       filePath: filePath,
       title: title,
       author: author,
-      initialPageIndex: initialPageIndex,
+      initialProgress: initialProgress,
+      initialCfi: initialCfi,
     );
   }
 }

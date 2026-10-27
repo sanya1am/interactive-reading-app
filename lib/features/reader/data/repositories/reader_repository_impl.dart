@@ -1,6 +1,6 @@
 import '../../../../core/error/failures.dart';
 import '../../../../core/utils/result.dart';
-import '../../domain/entities/reader_page.dart';
+import '../../domain/entities/reader_document.dart';
 import '../../domain/repositories/reader_repository.dart';
 import '../datasources/epub_reader_datasource.dart';
 
@@ -15,27 +15,38 @@ class ReaderRepositoryImpl implements ReaderRepository {
     required String filePath,
     required String title,
     String? author,
-    int initialPageIndex = 0,
+    double initialProgress = 0,
+    String? initialCfi,
   }) async {
     try {
-      final loaded = await _dataSource.loadBook(filePath);
-      final pages = loaded.pages;
-      final safeInitial = initialPageIndex.clamp(0, pages.length - 1);
+      await _dataSource.validateBookFile(filePath);
+
+      final safeProgress =
+      initialProgress.clamp(0.0, 1.0).toDouble();
+
+      final safeCfi = initialCfi?.trim();
 
       return Success(
         ReaderDocument(
           bookId: bookId,
           title: title,
           author: author,
-          pages: pages,
-          initialPageIndex: safeInitial,
-          locationIndex: loaded.locationIndex,
+          filePath: filePath,
+          initialProgress: safeProgress,
+          initialCfi:
+          safeCfi == null || safeCfi.isEmpty
+              ? null
+              : safeCfi,
         ),
       );
     } on Failure catch (failure) {
       return Error(failure);
     } catch (error) {
-      return Error(ParsingFailure('Не удалось открыть книгу: $error'));
+      return Error(
+        FileFailure(
+          'Не удалось открыть книгу: $error',
+        ),
+      );
     }
   }
 }
