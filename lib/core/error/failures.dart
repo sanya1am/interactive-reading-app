@@ -15,3 +15,18 @@ class ParsingFailure extends Failure {
 class StorageFailure extends Failure {
   const StorageFailure(super.message);
 }
+
+class NetworkFailure extends Failure {
+  const NetworkFailure(super.message);
+}
+
+class ApiFailure extends Failure {
+  const ApiFailure(
+      super.message, {
+        this.statusCode,
+        this.retryAfterSeconds,
+      });
+
+  final int? statusCode;
+  final int? retryAfterSeconds;
+}

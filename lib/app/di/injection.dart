@@ -1,4 +1,13 @@
+import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../core/network/api_client.dart';
+
+import '../../features/ai_analysis/data/datasources/ai_analysis_remote_datasource.dart';
+import '../../features/ai_analysis/data/repositories/ai_analysis_repository_impl.dart';
+import '../../features/ai_analysis/domain/repositories/ai_analysis_repository.dart';
+import '../../features/ai_analysis/domain/usecases/analyze_text.dart';
+import '../../features/ai_analysis/presentation/viewmodels/ai_analysis_view_model.dart';
 
 import '../../features/library/data/datasources/epub_file_datasource.dart';
 import '../../features/library/data/datasources/library_local_datasource.dart';
@@ -10,6 +19,7 @@ import '../../features/library/domain/usecases/import_book.dart';
 import '../../features/library/domain/usecases/set_favorite.dart';
 import '../../features/library/domain/usecases/update_reading_progress.dart';
 import '../../features/library/presentation/viewmodels/library_view_model.dart';
+
 import '../../features/reader/data/datasources/epub_reader_datasource.dart';
 import '../../features/reader/data/repositories/reader_repository_impl.dart';
 import '../../features/reader/domain/repositories/reader_repository.dart';
@@ -23,6 +33,8 @@ class ServiceLocator {
   ServiceLocator._();
 
   late final SharedPreferences preferences;
+
+  late final Dio dio;
 
   late final LibraryLocalDataSource
   libraryLocalDataSource;
@@ -39,6 +51,12 @@ class ServiceLocator {
   late final ReaderRepository
   readerRepository;
 
+  late final AiAnalysisRemoteDataSource
+  aiAnalysisRemoteDataSource;
+
+  late final AiAnalysisRepository
+  aiAnalysisRepository;
+
   late final GetBooks getBooks;
 
   late final ImportBook importBook;
@@ -52,6 +70,8 @@ class ServiceLocator {
 
   late final OpenBook openBook;
 
+  late final AnalyzeText analyzeText;
+
   bool _initialized = false;
 
   Future<void> init({
@@ -62,7 +82,10 @@ class ServiceLocator {
     }
 
     preferences =
-    await SharedPreferences.getInstance();
+    await SharedPreferences
+        .getInstance();
+
+    dio = ApiClient.create();
 
     libraryLocalDataSource =
         LibraryLocalDataSourceImpl(
@@ -89,6 +112,16 @@ class ServiceLocator {
     readerRepository =
         ReaderRepositoryImpl(
           epubReaderDataSource,
+        );
+
+    aiAnalysisRemoteDataSource =
+        AiAnalysisRemoteDataSourceImpl(
+          dio,
+        );
+
+    aiAnalysisRepository =
+        AiAnalysisRepositoryImpl(
+          aiAnalysisRemoteDataSource,
         );
 
     getBooks =
@@ -121,6 +154,11 @@ class ServiceLocator {
           readerRepository,
         );
 
+    analyzeText =
+        AnalyzeText(
+          aiAnalysisRepository,
+        );
+
     _initialized = true;
   }
 
@@ -140,6 +178,13 @@ class ServiceLocator {
       openBook: openBook,
       updateReadingProgress:
       updateReadingProgress,
+    );
+  }
+
+  AiAnalysisViewModel
+  createAiAnalysisViewModel() {
+    return AiAnalysisViewModel(
+      analyzeText: analyzeText,
     );
   }
 }
